@@ -1,0 +1,30 @@
+<!doctype html>  
+<html lang='en'>  
+<head>  
+<meta charset='UTF-8' />  
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />  
+<title>Pixel Slicer Studio - Premium</title>  
+<link rel='stylesheet' href='premium.css' />  
+</head>  
+<body>  
+<div class='mesh'></div>  
+<main class='shell'>  
+<header class='hero'>  
+<p class='eyebrow'>PRO TOOL</p>  
+<h1>Pixel Slicer Studio</h1>  
+<p class='lead'>Batch process multiple images with shared slicing settings, or trim transparent borders as a standalone action.</p>  
+</header>  
+<section class='card'>  
+<label for='imageInput'>Images (multi-select supported)</label>  
+<input id='imageInput' type='file' accept='image/*' multiple />  
+<div class='grid'>  
+<div><label for='rows'>Rows</label><input id='rows' type='number' min='1' value='2' /></div>  
+<div><label for='cols'>Columns</label><input id='cols' type='number' min='1' value='2' /></div>  
+</div>  
+<div class='actions'><button id='sliceBtn'>Slice All</button><button id='trimBtn' class='ghost'>Trim Transparent Border (All)</button><p id='status'>Waiting for images...</p></div>  
+</section>  
+<section class='card'><div class='row'><h2>Result</h2><span id='countBadge'>0 tiles</span></div><div id='preview' class='preview'></div></section>  
+</main>  
+<script src='premium.js'></script>  
+</body>  
+</html> 
