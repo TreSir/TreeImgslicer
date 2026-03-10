@@ -1,30 +1,102 @@
-<!doctype html>  
-<html lang='en'>  
-<head>  
-<meta charset='UTF-8' />  
-<meta name='viewport' content='width=device-width, initial-scale=1.0' />  
-<title>Pixel Slicer Studio - Premium</title>  
-<link rel='stylesheet' href='premium.css' />  
-</head>  
-<body>  
-<div class='mesh'></div>  
-<main class='shell'>  
-<header class='hero'>  
-<p class='eyebrow'>PRO TOOL</p>  
-<h1>Pixel Slicer Studio</h1>  
-<p class='lead'>Batch process multiple images with shared slicing settings, or trim transparent borders as a standalone action.</p>  
-</header>  
-<section class='card'>  
-<label for='imageInput'>Images (multi-select supported)</label>  
-<input id='imageInput' type='file' accept='image/*' multiple />  
-<div class='grid'>  
-<div><label for='rows'>Rows</label><input id='rows' type='number' min='1' value='2' /></div>  
-<div><label for='cols'>Columns</label><input id='cols' type='number' min='1' value='2' /></div>  
-</div>  
-<div class='actions'><button id='sliceBtn'>Slice All</button><button id='trimBtn' class='ghost'>Trim Transparent Border (All)</button><p id='status'>Waiting for images...</p></div>  
-</section>  
-<section class='card'><div class='row'><h2>Result</h2><span id='countBadge'>0 tiles</span></div><div id='preview' class='preview'></div></section>  
-</main>  
-<script src='premium.js'></script>  
-</body>  
-</html> 
+<!doctype html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>Pixel Slicer Studio - Premium</title>
+<link rel='stylesheet' href='premium.css' />
+</head>
+<body>
+<div class='mesh'></div>
+<div class='app'>
+<aside class='sidebar'>
+<div class='brand'>Pixel Slicer Studio</div>
+<button class='nav-btn active' data-target='slicer'>Image Slicer</button>
+<button class='nav-btn' data-target='video'>Video to Frames</button>
+</aside>
+<div class='content'>
+<main class='shell page active' data-page='slicer'>
+<header class='hero'>
+<p class='eyebrow'>PRO TOOL</p>
+<h1>Pixel Slicer Studio</h1>
+<p class='lead'>Batch process multiple images with shared slicing settings, or trim transparent borders as a standalone action.</p>
+</header>
+<section class='card'>
+<label for='imageInput'>Images (multi-select supported)</label>
+<input id='imageInput' type='file' accept='image/*' multiple />
+<div class='grid'>
+<div><label for='rows'>Rows</label><input id='rows' type='number' min='1' value='2' /></div>
+<div><label for='cols'>Columns</label><input id='cols' type='number' min='1' value='2' /></div>
+</div>
+<div class='actions'><button id='sliceBtn'>Slice All</button><button id='trimBtn' class='ghost'>Trim Transparent Border (All)</button><p id='status'>Waiting for images...</p></div>
+</section>
+<section class='card'><div class='row'><h2>Result</h2><span id='countBadge'>0 tiles</span></div><div id='preview' class='preview'></div></section>
+</main>
+<main class='shell page' data-page='video'>
+<header class='hero'>
+<p class='eyebrow'>NEW TOOL</p>
+<h1>Video to Sequence Frames</h1>
+<p class='lead'>Upload an animation clip, select the segment, extract frames, and apply chroma key with soft edges.</p>
+</header>
+<section class='card'>
+<label for='videoInput'>Animation Video</label>
+<input id='videoInput' type='file' accept='video/*' />
+<div class='video-wrap'>
+<video id='videoPreview' controls></video>
+</div>
+<div class='grid'>
+<div class='range-block'>
+<label for='startRange'>Segment Start</label>
+<input id='startRange' type='range' min='0' max='0' step='0.01' value='0' />
+<div class='range-meta'><span id='startTime'>0.00s</span></div>
+</div>
+<div class='range-block'>
+<label for='endRange'>Segment End</label>
+<input id='endRange' type='range' min='0' max='0' step='0.01' value='0' />
+<div class='range-meta'><span id='endTime'>0.00s</span></div>
+</div>
+</div>
+<label class='toggle'><input id='loopToggle' type='checkbox' checked />Loop preview between start/end</label>
+</section>
+<section class='card'>
+<div class='grid'>
+<div>
+<label for='frameCount'>Frame Count (default: segment length x 30)</label>
+<input id='frameCount' type='number' min='1' value='1' />
+</div>
+<div class='actions'>
+<button id='extractBtn'>Extract Frames</button>
+<button id='clearFramesBtn' class='ghost'>Clear Frames</button>
+</div>
+</div>
+<div class='grid'>
+<div>
+<label for='keyColor'>Chroma Key Color</label>
+<input id='keyColor' type='color' value='#00ff00' />
+</div>
+<div>
+<label for='keyTolerance'>Key Tolerance</label>
+<input id='keyTolerance' type='number' min='0' max='255' value='60' />
+</div>
+</div>
+<div class='grid'>
+<div>
+<label for='keyFeather'>Edge Feather (0-120)</label>
+<input id='keyFeather' type='number' min='0' max='120' value='24' />
+</div>
+<div class='actions'>
+<button id='chromaBtn'>Apply Chroma Key</button>
+<p id='videoStatus'>Waiting for video...</p>
+</div>
+</div>
+</section>
+<section class='card'>
+<div class='row'><h2>Frames</h2><span id='frameBadge'>0 frames</span></div>
+<div id='framePreview' class='frame-grid'></div>
+</section>
+</main>
+</div>
+</div>
+<script src='premium.js'></script>
+</body>
+</html>

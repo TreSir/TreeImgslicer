@@ -8,6 +8,24 @@ const countBadge = document.getElementById('countBadge');
 const preview = document.getElementById('preview');
 let sourceItems = [];
 
+const navButtons = Array.from(document.querySelectorAll('.nav-btn'));
+const pages = Array.from(document.querySelectorAll('.page'));
+
+function setActivePage(key) {
+  pages.forEach(function(page) {
+    page.classList.toggle('active', page.dataset.page === key);
+  });
+  navButtons.forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.target === key);
+  });
+}
+
+navButtons.forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    setActivePage(btn.dataset.target);
+  });
+});
+
 function imageToCanvas(img) {
   const c = document.createElement('canvas');
   c.width = img.width;
@@ -203,4 +221,288 @@ preview.addEventListener('mouseout', function(ev) {
   if (!t.closest('.tile')) return;
   hideHoverPreview();
   hideHoverPreview();
+});
+
+const videoInput = document.getElementById('videoInput');
+const videoPreview = document.getElementById('videoPreview');
+const startRange = document.getElementById('startRange');
+const endRange = document.getElementById('endRange');
+const startTime = document.getElementById('startTime');
+const endTime = document.getElementById('endTime');
+const loopToggle = document.getElementById('loopToggle');
+const frameCountInput = document.getElementById('frameCount');
+const extractBtn = document.getElementById('extractBtn');
+const clearFramesBtn = document.getElementById('clearFramesBtn');
+const videoStatus = document.getElementById('videoStatus');
+const framePreview = document.getElementById('framePreview');
+const frameBadge = document.getElementById('frameBadge');
+const chromaBtn = document.getElementById('chromaBtn');
+const keyColor = document.getElementById('keyColor');
+const keyTolerance = document.getElementById('keyTolerance');
+const keyFeather = document.getElementById('keyFeather');
+
+let videoObjectUrl = '';
+let segmentStart = 0;
+let segmentEnd = 0;
+let frames = [];
+
+function formatSeconds(value) {
+  return value.toFixed(2) + 's';
+}
+
+function updateSegmentLabels() {
+  startTime.textContent = formatSeconds(segmentStart);
+  endTime.textContent = formatSeconds(segmentEnd);
+}
+
+function setDefaultFrameCount() {
+  const length = Math.max(0, segmentEnd - segmentStart);
+  const estimated = Math.max(1, Math.round(length * 30));
+  frameCountInput.value = estimated;
+}
+
+function updateFrameBadge() {
+  frameBadge.textContent = frames.length + ' frames';
+}
+
+function renderFrames() {
+  framePreview.innerHTML = '';
+  frames.forEach(function(frame, index) {
+    const card = document.createElement('article');
+    card.className = 'frame-card';
+    const img = document.createElement('img');
+    img.src = frame.url;
+    const meta = document.createElement('div');
+    meta.className = 'frame-meta';
+    const label = document.createElement('div');
+    label.textContent = 'Frame ' + (index + 1);
+    const actions = document.createElement('div');
+    actions.className = 'frame-actions';
+
+    const upBtn = document.createElement('button');
+    upBtn.textContent = 'Up';
+    upBtn.addEventListener('click', function() {
+      if (index === 0) return;
+      const temp = frames[index - 1];
+      frames[index - 1] = frames[index];
+      frames[index] = temp;
+      renderFrames();
+    });
+
+    const downBtn = document.createElement('button');
+    downBtn.textContent = 'Down';
+    downBtn.addEventListener('click', function() {
+      if (index === frames.length - 1) return;
+      const temp = frames[index + 1];
+      frames[index + 1] = frames[index];
+      frames[index] = temp;
+      renderFrames();
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', function() {
+      frames.splice(index, 1);
+      renderFrames();
+    });
+
+    const download = document.createElement('a');
+    download.textContent = 'Download';
+    download.href = frame.url;
+    download.download = 'frame-' + (index + 1) + '.png';
+
+    actions.appendChild(upBtn);
+    actions.appendChild(downBtn);
+    actions.appendChild(deleteBtn);
+    actions.appendChild(download);
+
+    meta.appendChild(label);
+    meta.appendChild(actions);
+    card.appendChild(img);
+    card.appendChild(meta);
+    framePreview.appendChild(card);
+  });
+  updateFrameBadge();
+}
+
+function resetFrames() {
+  frames = [];
+  renderFrames();
+}
+
+function seekVideo(targetTime) {
+  return new Promise(function(resolve) {
+    const handler = function() {
+      videoPreview.removeEventListener('seeked', handler);
+      resolve();
+    };
+    videoPreview.addEventListener('seeked', handler);
+    videoPreview.currentTime = targetTime;
+  });
+}
+
+async function captureFrames(frameCount) {
+  const canvas = document.createElement('canvas');
+  canvas.width = videoPreview.videoWidth;
+  canvas.height = videoPreview.videoHeight;
+  const ctx = canvas.getContext('2d');
+  const length = Math.max(0.01, segmentEnd - segmentStart);
+  const step = frameCount > 1 ? length / (frameCount - 1) : 0;
+  const output = [];
+
+  for (let i = 0; i < frameCount; i++) {
+    const time = segmentStart + (step * i);
+    await seekVideo(time);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(videoPreview, 0, 0, canvas.width, canvas.height);
+    const frameCanvas = document.createElement('canvas');
+    frameCanvas.width = canvas.width;
+    frameCanvas.height = canvas.height;
+    frameCanvas.getContext('2d').drawImage(canvas, 0, 0);
+    output.push({ canvas: frameCanvas, url: frameCanvas.toDataURL('image/png') });
+  }
+  return output;
+}
+
+function parseColor(colorValue) {
+  const hex = colorValue.replace('#', '').trim();
+  if (hex.length !== 6) return { r: 0, g: 255, b: 0 };
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16)
+  };
+}
+
+function applyChromaKeyToCanvas(canvas, key, tolerance, feather) {
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const softEdge = Math.max(0, feather);
+  const softLimit = tolerance + softEdge;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const a = data[i + 3];
+    if (a === 0) continue;
+    const dr = r - key.r;
+    const dg = g - key.g;
+    const db = b - key.b;
+    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+    if (dist <= tolerance) {
+      data[i + 3] = 0;
+    } else if (softEdge > 0 && dist < softLimit) {
+      const blend = (dist - tolerance) / (softLimit - tolerance);
+      data[i + 3] = Math.round(a * blend);
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+videoInput.addEventListener('change', function() {
+  const file = videoInput.files && videoInput.files[0];
+  if (!file) {
+    videoStatus.textContent = 'Please select a video.';
+    return;
+  }
+  if (videoObjectUrl) {
+    URL.revokeObjectURL(videoObjectUrl);
+  }
+  videoObjectUrl = URL.createObjectURL(file);
+  videoPreview.src = videoObjectUrl;
+  videoStatus.textContent = 'Loading video metadata...';
+  videoPreview.load();
+});
+
+videoPreview.addEventListener('loadedmetadata', function() {
+  segmentStart = 0;
+  segmentEnd = Math.max(0, videoPreview.duration || 0);
+  startRange.min = '0';
+  endRange.min = '0';
+  startRange.max = segmentEnd.toString();
+  endRange.max = segmentEnd.toString();
+  startRange.value = '0';
+  endRange.value = segmentEnd.toString();
+  updateSegmentLabels();
+  setDefaultFrameCount();
+  videoStatus.textContent = 'Video ready. Duration: ' + formatSeconds(segmentEnd);
+});
+
+startRange.addEventListener('input', function() {
+  segmentStart = Math.min(Number(startRange.value), segmentEnd);
+  if (segmentStart > segmentEnd) {
+    segmentStart = segmentEnd;
+    startRange.value = segmentStart;
+  }
+  updateSegmentLabels();
+});
+
+endRange.addEventListener('input', function() {
+  segmentEnd = Math.max(Number(endRange.value), segmentStart);
+  if (segmentEnd < segmentStart) {
+    segmentEnd = segmentStart;
+    endRange.value = segmentEnd;
+  }
+  updateSegmentLabels();
+});
+
+videoPreview.addEventListener('timeupdate', function() {
+  if (!loopToggle.checked) return;
+  if (videoPreview.currentTime > segmentEnd - 0.04) {
+    videoPreview.currentTime = segmentStart;
+  }
+  if (videoPreview.currentTime < segmentStart) {
+    videoPreview.currentTime = segmentStart;
+  }
+});
+
+extractBtn.addEventListener('click', async function() {
+  if (!videoPreview.src) {
+    videoStatus.textContent = 'Upload a video first.';
+    return;
+  }
+  const frameCount = Number(frameCountInput.value);
+  if (!frameCount || frameCount < 1) {
+    videoStatus.textContent = 'Frame count must be at least 1.';
+    return;
+  }
+  if (segmentEnd <= segmentStart) {
+    videoStatus.textContent = 'Segment end must be after start.';
+    return;
+  }
+  videoStatus.textContent = 'Extracting frames...';
+  extractBtn.disabled = true;
+  try {
+    frames = await captureFrames(frameCount);
+    renderFrames();
+    videoStatus.textContent = 'Extracted ' + frames.length + ' frames.';
+  } catch (err) {
+    videoStatus.textContent = 'Failed to extract frames.';
+  } finally {
+    extractBtn.disabled = false;
+  }
+});
+
+clearFramesBtn.addEventListener('click', function() {
+  resetFrames();
+  videoStatus.textContent = 'Frames cleared.';
+});
+
+chromaBtn.addEventListener('click', function() {
+  if (frames.length === 0) {
+    videoStatus.textContent = 'Extract frames first.';
+    return;
+  }
+  const key = parseColor(keyColor.value);
+  const tolerance = Math.max(0, Math.min(255, Number(keyTolerance.value)));
+  const feather = Math.max(0, Math.min(120, Number(keyFeather.value)));
+  videoStatus.textContent = 'Applying chroma key...';
+  frames.forEach(function(frame) {
+    applyChromaKeyToCanvas(frame.canvas, key, tolerance, feather);
+    frame.url = frame.canvas.toDataURL('image/png');
+  });
+  renderFrames();
+  videoStatus.textContent = 'Chroma key applied.';
 });
