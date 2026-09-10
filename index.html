@@ -1,102 +1,415 @@
 <!doctype html>
-<html lang='en'>
+<html lang="zh-CN">
 <head>
-<meta charset='UTF-8' />
-<meta name='viewport' content='width=device-width, initial-scale=1.0' />
-<title>Pixel Slicer Studio - Premium</title>
-<link rel='stylesheet' href='premium.css' />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#08111f" />
+  <link rel="icon" href="data:," />
+  <title>Pixel Slicer Studio · 序列帧工具</title>
+  <link rel="stylesheet" href="premium.css" />
 </head>
 <body>
-<div class='mesh'></div>
-<div class='app'>
-<aside class='sidebar'>
-<div class='brand'>Pixel Slicer Studio</div>
-<button class='nav-btn active' data-target='slicer'>Image Slicer</button>
-<button class='nav-btn' data-target='video'>Video to Frames</button>
-</aside>
-<div class='content'>
-<main class='shell page active' data-page='slicer'>
-<header class='hero'>
-<p class='eyebrow'>PRO TOOL</p>
-<h1>Pixel Slicer Studio</h1>
-<p class='lead'>Batch process multiple images with shared slicing settings, or trim transparent borders as a standalone action.</p>
-</header>
-<section class='card'>
-<label for='imageInput'>Images (multi-select supported)</label>
-<input id='imageInput' type='file' accept='image/*' multiple />
-<div class='grid'>
-<div><label for='rows'>Rows</label><input id='rows' type='number' min='1' value='2' /></div>
-<div><label for='cols'>Columns</label><input id='cols' type='number' min='1' value='2' /></div>
-</div>
-<div class='actions'><button id='sliceBtn'>Slice All</button><button id='trimBtn' class='ghost'>Trim Transparent Border (All)</button><p id='status'>Waiting for images...</p></div>
-</section>
-<section class='card'><div class='row'><h2>Result</h2><span id='countBadge'>0 tiles</span></div><div id='preview' class='preview'></div></section>
-</main>
-<main class='shell page' data-page='video'>
-<header class='hero'>
-<p class='eyebrow'>NEW TOOL</p>
-<h1>Video to Sequence Frames</h1>
-<p class='lead'>Upload an animation clip, select the segment, extract frames, and apply chroma key with soft edges.</p>
-</header>
-<section class='card'>
-<label for='videoInput'>Animation Video</label>
-<input id='videoInput' type='file' accept='video/*' />
-<div class='video-wrap'>
-<video id='videoPreview' controls></video>
-</div>
-<div class='grid'>
-<div class='range-block'>
-<label for='startRange'>Segment Start</label>
-<input id='startRange' type='range' min='0' max='0' step='0.01' value='0' />
-<div class='range-meta'><span id='startTime'>0.00s</span></div>
-</div>
-<div class='range-block'>
-<label for='endRange'>Segment End</label>
-<input id='endRange' type='range' min='0' max='0' step='0.01' value='0' />
-<div class='range-meta'><span id='endTime'>0.00s</span></div>
-</div>
-</div>
-<label class='toggle'><input id='loopToggle' type='checkbox' checked />Loop preview between start/end</label>
-</section>
-<section class='card'>
-<div class='grid'>
-<div>
-<label for='frameCount'>Frame Count (default: segment length x 30)</label>
-<input id='frameCount' type='number' min='1' value='1' />
-</div>
-<div class='actions'>
-<button id='extractBtn'>Extract Frames</button>
-<button id='clearFramesBtn' class='ghost'>Clear Frames</button>
-</div>
-</div>
-<div class='grid'>
-<div>
-<label for='keyColor'>Chroma Key Color</label>
-<input id='keyColor' type='color' value='#00ff00' />
-</div>
-<div>
-<label for='keyTolerance'>Key Tolerance</label>
-<input id='keyTolerance' type='number' min='0' max='255' value='60' />
-</div>
-</div>
-<div class='grid'>
-<div>
-<label for='keyFeather'>Edge Feather (0-120)</label>
-<input id='keyFeather' type='number' min='0' max='120' value='24' />
-</div>
-<div class='actions'>
-<button id='chromaBtn'>Apply Chroma Key</button>
-<p id='videoStatus'>Waiting for video...</p>
-</div>
-</div>
-</section>
-<section class='card'>
-<div class='row'><h2>Frames</h2><span id='frameBadge'>0 frames</span></div>
-<div id='framePreview' class='frame-grid'></div>
-</section>
-</main>
-</div>
-</div>
-<script src='premium.js'></script>
+  <div class="mesh" aria-hidden="true"></div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">PS</span>
+        <span>Pixel Slicer</span>
+      </div>
+      <p class="sidebar-kicker">LOCAL TOOLKIT</p>
+      <nav class="nav" aria-label="工具导航">
+        <button class="nav-btn active" data-target="slicer" type="button">
+          <span class="nav-icon">▦</span>
+          <span><strong>序列帧切分</strong><small>Sprite sheet</small></span>
+        </button>
+        <button class="nav-btn" data-target="video" type="button">
+          <span class="nav-icon">▶</span>
+          <span><strong>视频转序列帧</strong><small>Video to frames</small></span>
+        </button>
+      </nav>
+      <div class="sidebar-note">
+        <span class="status-dot"></span>
+        <div>
+          <strong>浏览器本地处理</strong>
+          <p>图片不会上传到服务器。</p>
+        </div>
+      </div>
+    </aside>
+
+    <div class="content">
+      <main class="shell page active" data-page="slicer">
+        <header class="hero hero-with-stat">
+          <div>
+            <p class="eyebrow">SPRITE WORKBENCH</p>
+            <h1>序列帧切分工作台</h1>
+            <p class="lead">把图集快速切成可预览、可逐帧下载的动画序列。支持多张图集批处理、间距偏移和透明边框修剪。</p>
+          </div>
+          <div class="hero-stat" aria-label="当前生成帧数">
+            <strong id="headerFrameStat">0</strong>
+            <span>已生成帧</span>
+          </div>
+        </header>
+
+        <section class="card upload-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-eyebrow">01 / IMPORT</p>
+              <h2>导入图集</h2>
+            </div>
+            <span class="section-tip">支持 PNG / JPG / WEBP · 可多选</span>
+          </div>
+          <label class="drop-zone" id="imageDropZone" for="imageInput">
+            <span class="drop-icon">＋</span>
+            <span class="drop-title">拖拽图片到这里，或点击选择</span>
+            <span class="drop-subtitle">一次导入多张图集，会按文件分别生成动画序列</span>
+            <input id="imageInput" type="file" accept="image/*" multiple />
+          </label>
+          <div id="sourceSummary" class="source-summary empty" aria-live="polite">
+            <span>还没有导入图片</span>
+          </div>
+        </section>
+
+        <section class="workbench-grid">
+          <section class="card settings-card">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="section-eyebrow">02 / SLICE</p>
+                <h2>切分参数</h2>
+              </div>
+              <button id="resetSettingsBtn" class="text-btn" type="button">恢复默认</button>
+            </div>
+
+            <div class="subheading-row">
+              <h3>网格布局</h3>
+              <span id="gridHint" class="setting-hint">导入图片后显示预计尺寸</span>
+            </div>
+            <div class="field-grid two-columns">
+              <div class="field">
+                <label for="rows">行数</label>
+                <input id="rows" type="number" min="1" max="64" step="1" value="4" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="cols">列数</label>
+                <input id="cols" type="number" min="1" max="64" step="1" value="4" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="orderSelect">帧顺序</label>
+                <select id="orderSelect">
+                  <option value="row-major">从左到右，再换行</option>
+                  <option value="column-major">从上到下，再换列</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="edgeMode">边缘余量</label>
+                <select id="edgeMode">
+                  <option value="crop">裁切余量（帧尺寸一致）</option>
+                  <option value="include">包含余量（末行/列变宽）</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="subheading-row spacing-heading">
+              <h3>偏移与间距 <span class="help-dot" title="适用于图集带外边距或帧之间有空隙的情况">?</span></h3>
+              <span class="setting-hint">单位：px</span>
+            </div>
+            <div class="field-grid four-columns">
+              <div class="field">
+                <label for="offsetX">左偏移</label>
+                <input id="offsetX" type="number" min="0" step="1" value="0" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="offsetY">上偏移</label>
+                <input id="offsetY" type="number" min="0" step="1" value="0" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="gapX">横向间距</label>
+                <input id="gapX" type="number" min="0" step="1" value="0" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="gapY">纵向间距</label>
+                <input id="gapY" type="number" min="0" step="1" value="0" inputmode="numeric" />
+              </div>
+            </div>
+
+            <div class="option-list">
+              <label class="check-row">
+                <input id="trimFramesToggle" type="checkbox" />
+                <span><strong>切分后修剪透明边框</strong><small>保持每帧主体更紧凑，尺寸可能不同</small></span>
+              </label>
+              <label class="check-row">
+                <input id="liveUpdateToggle" type="checkbox" />
+                <span><strong>调整参数时自动更新</strong><small>帧数较多时建议关闭，手动点击生成更流畅</small></span>
+              </label>
+            </div>
+
+            <div class="actions settings-actions">
+              <button id="sliceBtn" type="button">生成序列帧</button>
+              <button id="trimBtn" class="ghost" type="button">仅修剪透明边框</button>
+              <button id="clearResultsBtn" class="quiet-btn" type="button">清空结果</button>
+            </div>
+            <p id="status" class="status-line" aria-live="polite">等待导入图片...</p>
+          </section>
+
+          <section class="card animation-card">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="section-eyebrow">03 / PREVIEW</p>
+                <h2>动画预览</h2>
+              </div>
+              <span id="animationBadge" class="badge">未生成</span>
+            </div>
+
+            <div class="animation-stage" id="animationStage" data-background="checker">
+              <canvas id="animationCanvas" width="320" height="240" aria-label="序列帧动画预览"></canvas>
+              <div id="animationEmpty" class="stage-empty">
+                <span class="stage-empty-icon">◇</span>
+                <span>生成帧后点击播放</span>
+              </div>
+            </div>
+
+            <div class="animation-controls">
+              <div class="control-row primary-controls">
+                <button id="prevFrameBtn" class="icon-btn" type="button" title="上一帧" aria-label="上一帧">‹</button>
+                <button id="playAnimationBtn" class="play-btn" type="button" disabled>▶ 播放</button>
+                <button id="nextFrameBtn" class="icon-btn" type="button" title="下一帧" aria-label="下一帧">›</button>
+                <select id="animationSourceSelect" aria-label="选择预览序列" disabled>
+                  <option>暂无序列</option>
+                </select>
+              </div>
+              <div class="timeline-row">
+                <input id="animationSeek" type="range" min="0" max="0" value="0" step="1" disabled aria-label="动画帧进度" />
+                <span id="animationFrameLabel">0 / 0</span>
+              </div>
+              <div class="preview-options">
+                <label class="inline-field" for="previewFps">播放速度
+                  <input id="previewFps" type="number" min="1" max="120" step="1" value="12" />
+                  <span>FPS</span>
+                </label>
+                <label class="inline-field" for="previewZoom">预览缩放
+                  <select id="previewZoom">
+                    <option value="1">100%</option>
+                    <option value="2" selected>200%</option>
+                    <option value="3">300%</option>
+                    <option value="4">400%</option>
+                  </select>
+                </label>
+                <label class="inline-field" for="previewBackground">背景
+                  <select id="previewBackground">
+                    <option value="checker" selected>棋盘格</option>
+                    <option value="dark">深色</option>
+                    <option value="light">浅色</option>
+                    <option value="transparent">透明</option>
+                  </select>
+                </label>
+                <button id="downloadFrameBtn" class="quiet-btn" type="button" disabled>下载当前帧</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="card result-card">
+          <div class="section-heading result-heading">
+            <div>
+              <p class="section-eyebrow">04 / OUTPUT</p>
+              <h2>切分结果</h2>
+              <p id="resultHint" class="subtle-text">点击任意帧即可在上方动画预览中定位。</p>
+            </div>
+            <div class="result-stats">
+              <span id="dimensionBadge" class="subtle-badge">—</span>
+              <span id="countBadge" class="badge">0 帧</span>
+            </div>
+          </div>
+          <div id="preview" class="preview">
+            <div id="resultsEmpty" class="results-empty">
+              <span class="results-empty-icon">▧</span>
+              <strong>还没有切分结果</strong>
+              <span>导入图集后设置行列并生成序列帧。</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <main class="shell page" data-page="video">
+        <header class="hero hero-with-stat">
+          <div>
+            <p class="eyebrow">MOTION WORKBENCH</p>
+            <h1>视频转序列帧</h1>
+            <p class="lead">精确选取片段，按帧数或 FPS 采样，直接导出适合游戏、动效和 UI 的 PNG 序列。</p>
+          </div>
+          <div class="hero-stat-group" aria-label="视频信息">
+            <div class="hero-stat">
+              <strong id="videoDurationBadge">—</strong>
+              <span>视频时长</span>
+            </div>
+            <div class="hero-stat">
+              <strong id="videoFrameSizeBadge">—</strong>
+              <span>画面尺寸</span>
+            </div>
+          </div>
+        </header>
+
+        <section class="video-workbench-grid">
+          <section class="card video-source-card">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="section-eyebrow">01 / SOURCE</p>
+                <h2>视频预览</h2>
+              </div>
+              <span id="videoFormatBadge" class="subtle-badge">未加载</span>
+            </div>
+            <label class="video-drop-zone" id="videoDropZone" for="videoInput">
+              <span class="video-drop-icon">▶</span>
+              <span id="videoFileLabel" class="video-drop-title">点击或拖拽视频文件</span>
+              <span class="video-drop-subtitle">MP4 / WebM / MOV · 文件只在本地解码</span>
+              <input id="videoInput" type="file" accept="video/*" />
+            </label>
+            <div class="video-stage" id="videoStage">
+              <video id="videoPreview" controls preload="metadata" playsinline></video>
+              <div id="videoEmpty" class="video-empty">
+                <span>◇</span>
+                <strong>选择视频后开始预览</strong>
+                <small>建议使用 H.264 MP4 或 WebM</small>
+              </div>
+            </div>
+            <div class="video-meta-strip">
+              <span><i class="meta-dot"></i><strong id="videoCurrentTime">00:00.00</strong> 当前时间</span>
+              <span><i class="meta-dot blue"></i><strong id="videoCodecHint">本地处理</strong></span>
+            </div>
+          </section>
+
+          <section class="card video-process-card">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="section-eyebrow">02 / SETTINGS</p>
+                <h2>采样与输出</h2>
+              </div>
+              <span class="section-tip">实时计算预计帧数</span>
+            </div>
+            <div class="process-callout">
+              <span class="callout-icon">✦</span>
+              <div><strong>按需控制采样密度</strong><small>片段越长、采样越密，处理时间和内存占用越高。</small></div>
+            </div>
+            <div class="field-grid two-columns">
+              <div class="field">
+                <label for="sampleMode">采样方式</label>
+                <select id="sampleMode">
+                  <option value="count">按指定帧数</option>
+                  <option value="fps">按 FPS 采样</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="frameCount">目标帧数</label>
+                <input id="frameCount" type="number" min="1" max="2000" value="1" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="sampleFps">采样 FPS</label>
+                <input id="sampleFps" type="number" min="1" max="120" step="1" value="12" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="outputScale">输出尺寸</label>
+                <select id="outputScale">
+                  <option value="1" selected>原始尺寸 · 100%</option>
+                  <option value="0.75">缩小 · 75%</option>
+                  <option value="0.5">缩小 · 50%</option>
+                  <option value="0.25">缩小 · 25%</option>
+                </select>
+              </div>
+            </div>
+            <div class="sample-readout">
+              <span id="sampleStepLabel">等待视频片段</span>
+              <span class="sample-limit">最多 2000 帧</span>
+            </div>
+            <div class="actions process-actions">
+              <button id="extractBtn" type="button">提取序列帧</button>
+              <button id="clearFramesBtn" class="ghost" type="button">清空结果</button>
+            </div>
+            <p id="videoStatus" class="status-line">等待选择视频...</p>
+
+            <div class="chroma-panel">
+              <div class="subheading-row">
+                <h3>色键透明 <span class="optional-label">可选</span></h3>
+                <span class="setting-hint">对已提取帧处理</span>
+              </div>
+              <div class="field-grid chroma-grid">
+                <div class="field color-field">
+                  <label for="keyColor">颜色</label>
+                  <input id="keyColor" type="color" value="#00ff00" />
+                </div>
+                <div class="field">
+                  <label for="keyTolerance">容差</label>
+                  <input id="keyTolerance" type="number" min="0" max="255" value="60" />
+                </div>
+                <div class="field">
+                  <label for="keyFeather">羽化</label>
+                  <input id="keyFeather" type="number" min="0" max="120" value="24" />
+                </div>
+              </div>
+              <button id="chromaBtn" class="quiet-btn wide-btn" type="button">应用色键透明</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="card timeline-card">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="section-eyebrow">03 / TIMELINE</p>
+              <h2>选择片段</h2>
+            </div>
+            <div class="timeline-summary">
+              <div><strong id="segmentLengthLabel">0.00s</strong><span>选中时长</span></div>
+              <div class="time-pair"><span id="startTime">0.00s</span><b>→</b><span id="endTime">0.00s</span></div>
+            </div>
+          </div>
+          <div class="timeline-inputs">
+            <div class="field range-block">
+              <div class="range-label-row"><label for="startRange">片段开始</label><span>START</span></div>
+              <input id="startRange" type="range" min="0" max="0" step="0.01" value="0" />
+            </div>
+            <div class="field range-block">
+              <div class="range-label-row"><label for="endRange">片段结束</label><span>END</span></div>
+              <input id="endRange" type="range" min="0" max="0" step="0.01" value="0" />
+            </div>
+          </div>
+          <div class="timeline-actions">
+            <button id="setStartFromCurrentBtn" class="quiet-btn" type="button">以当前时间设开始</button>
+            <button id="setEndFromCurrentBtn" class="quiet-btn" type="button">以当前时间设结束</button>
+            <button id="resetSegmentBtn" class="text-btn" type="button">重置片段</button>
+            <button id="playSegmentBtn" class="play-segment-btn" type="button">▶ 播放片段</button>
+            <label class="check-row timeline-check">
+              <input id="loopToggle" type="checkbox" checked />
+              <span><strong>循环片段</strong><small>预览时自动回到开始</small></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="card video-output-card">
+          <div class="section-heading result-heading">
+            <div>
+              <p class="section-eyebrow">04 / OUTPUT</p>
+              <h2>视频帧结果</h2>
+              <p id="videoOutputHint" class="subtle-text">生成后可点击帧卡片定位视频时间。</p>
+            </div>
+            <div class="result-stats">
+              <span id="outputResolution" class="subtle-badge">—</span>
+              <span id="sampleSummary" class="subtle-badge">—</span>
+              <span id="frameBadge" class="badge">0 帧</span>
+            </div>
+          </div>
+          <div class="output-toolbar">
+            <span>每张 PNG 都保留透明通道</span>
+            <button id="downloadAllFramesBtn" class="quiet-btn" type="button" disabled>下载全部帧</button>
+          </div>
+          <div id="framePreview" class="frame-grid">
+            <div class="results-empty">
+              <span class="results-empty-icon">▧</span>
+              <strong>还没有提取结果</strong>
+              <span>选择视频、片段和采样方式后开始提取。</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script src="premium.js"></script>
 </body>
 </html>
