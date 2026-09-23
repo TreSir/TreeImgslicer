@@ -43,6 +43,7 @@ const previewFps = $('#previewFps');
 const previewZoom = $('#previewZoom');
 const previewBackground = $('#previewBackground');
 const downloadFrameBtn = $('#downloadFrameBtn');
+const downloadSliceZipBtn = $('#downloadSliceZipBtn');
 
 const DEFAULT_SLICE_SETTINGS = {
   rows: 4,
@@ -67,6 +68,7 @@ let animationFrameRequest = 0;
 let animationPlaying = false;
 let animationFrameIndex = 0;
 let animationLastTime = 0;
+let sliceZipProcessing = false;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -126,6 +128,125 @@ function paddedFrameNumber(index) {
 
 function frameFileName(set, index) {
   return getFileStem(set.name) + '_frame_' + paddedFrameNumber(index) + '.png';
+}
+
+const zipTextEncoder = new TextEncoder();
+const zipCrcTable = (function() {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+}());
+
+function crc32(bytes) {
+  let value = 0xffffffff;
+  for (let index = 0; index < bytes.length; index += 1) {
+    value = zipCrcTable[(value ^ bytes[index]) & 0xff] ^ (value >>> 8);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+function dataUrlToBytes(dataUrl) {
+  const separator = String(dataUrl || '').indexOf(',');
+  if (separator < 0) throw new Error('无法读取帧图像数据。');
+  const header = dataUrl.slice(0, separator);
+  const payload = dataUrl.slice(separator + 1);
+  if (header.indexOf(';base64') < 0) return zipTextEncoder.encode(decodeURIComponent(payload));
+  const binary = window.atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function createZipBlob(entries) {
+  const localParts = [];
+  const centralParts = [];
+  let localOffset = 0;
+
+  entries.forEach(function(entry) {
+    const nameBytes = zipTextEncoder.encode(entry.name);
+    const data = entry.data instanceof Uint8Array ? entry.data : new Uint8Array(entry.data);
+    const checksum = crc32(data);
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, 0, true);
+    localView.setUint16(12, 0, true);
+    localView.setUint32(14, checksum, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+    localParts.push(localHeader, data);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, 0, true);
+    centralView.setUint16(14, 0, true);
+    centralView.setUint32(16, checksum, true);
+    centralView.setUint32(20, data.length, true);
+    centralView.setUint32(24, data.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, localOffset, true);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+    localOffset += localHeader.length + data.length;
+  });
+
+  const centralSize = centralParts.reduce(function(total, part) { return total + part.length; }, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, entries.length, true);
+  endView.setUint16(10, entries.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, localOffset, true);
+
+  return new Blob(localParts.concat(centralParts, [end]), { type: 'application/zip' });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
+
+async function downloadZipBundle(entries, filename, manifest, onProgress) {
+  const zipEntries = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    zipEntries.push({ name: entries[index].name, data: dataUrlToBytes(entries[index].url) });
+    if (onProgress) onProgress(index + 1, entries.length);
+    if (index > 0 && index % 24 === 0) await nextPaint();
+  }
+  zipEntries.push({
+    name: 'manifest.json',
+    data: zipTextEncoder.encode(JSON.stringify(manifest, null, 2))
+  });
+  downloadBlob(createZipBlob(zipEntries), filename);
 }
 
 function canvasThumbnail(canvas) {
@@ -449,6 +570,7 @@ async function sliceAll() {
   sliceBtn.disabled = true;
   trimBtn.disabled = true;
   clearResultsBtn.disabled = true;
+  downloadSliceZipBtn.disabled = true;
   const nextSets = [];
 
   try {
@@ -473,6 +595,7 @@ async function sliceAll() {
       sliceBtn.disabled = false;
       trimBtn.disabled = false;
       clearResultsBtn.disabled = false;
+      downloadSliceZipBtn.disabled = sliceSets.length === 0;
     }
   }
 }
@@ -488,6 +611,7 @@ async function trimAllImages() {
   sliceBtn.disabled = true;
   trimBtn.disabled = true;
   clearResultsBtn.disabled = true;
+  downloadSliceZipBtn.disabled = true;
   const nextSets = [];
   let trimmedCount = 0;
 
@@ -526,6 +650,7 @@ async function trimAllImages() {
       sliceBtn.disabled = false;
       trimBtn.disabled = false;
       clearResultsBtn.disabled = false;
+      downloadSliceZipBtn.disabled = sliceSets.length === 0;
     }
   }
 }
@@ -607,6 +732,7 @@ function renderResults() {
   preview.replaceChildren();
   if (sliceSets.length === 0) {
     preview.appendChild(createResultsEmpty());
+    downloadSliceZipBtn.disabled = true;
     countBadge.textContent = '0 帧';
     headerFrameStat.textContent = '0';
     dimensionBadge.textContent = '—';
@@ -638,6 +764,7 @@ function renderResults() {
     fragment.appendChild(group);
   });
   preview.appendChild(fragment);
+  downloadSliceZipBtn.disabled = sliceZipProcessing;
   updateResultStats();
   if (activeSetIndex >= 0) setActiveAnimationSet(activeSetIndex, animationFrameIndex, false);
 }
@@ -830,6 +957,63 @@ function downloadCurrentFrame() {
   link.click();
 }
 
+function buildSliceZipPayload() {
+  const entries = [];
+  const manifestSets = [];
+  sliceSets.forEach(function(set, setIndex) {
+    const folder = String(setIndex + 1).padStart(2, '0') + '_' + getFileStem(set.name);
+    const manifestFrames = [];
+    set.frames.forEach(function(frame, frameIndex) {
+      const name = folder + '/frame_' + paddedFrameNumber(frameIndex) + '.png';
+      entries.push({ name: name, url: frameUrl(frame) });
+      manifestFrames.push({
+        file: name,
+        index: frameIndex + 1,
+        row: frame.row,
+        column: frame.col,
+        width: frame.canvas.width,
+        height: frame.canvas.height,
+        trimmed: Boolean(frame.trimmed)
+      });
+    });
+    manifestSets.push({
+      source: set.name,
+      sourceWidth: set.sourceWidth,
+      sourceHeight: set.sourceHeight,
+      frames: manifestFrames
+    });
+  });
+  return {
+    entries: entries,
+    manifest: {
+      formatVersion: 1,
+      tool: 'Pixel Slicer Studio',
+      type: 'sprite-sheet',
+      generatedAt: new Date().toISOString(),
+      settings: getSliceSettings(),
+      sets: manifestSets
+    }
+  };
+}
+
+async function downloadSliceZip() {
+  if (sliceSets.length === 0 || sliceZipProcessing) return;
+  sliceZipProcessing = true;
+  downloadSliceZipBtn.disabled = true;
+  const payload = buildSliceZipPayload();
+  try {
+    await downloadZipBundle(payload.entries, 'pixel-slicer-frames.zip', payload.manifest, function(done, total) {
+      setStatus('正在打包序列帧 ' + done + '/' + total + '...');
+    });
+    setStatus('已下载 ZIP：' + payload.entries.length + ' 帧 PNG 与 manifest.json。', 'success');
+  } catch (error) {
+    setStatus('ZIP 打包失败，请减少帧数或分批导出后重试。', 'error');
+  } finally {
+    sliceZipProcessing = false;
+    downloadSliceZipBtn.disabled = sliceSets.length === 0;
+  }
+}
+
 function queueLiveUpdate() {
   updateGridHint();
   if (!liveUpdateToggle.checked || sourceItems.length === 0) return;
@@ -901,6 +1085,7 @@ previewBackground.addEventListener('change', function() {
   animationStage.dataset.background = previewBackground.value;
 });
 downloadFrameBtn.addEventListener('click', downloadCurrentFrame);
+downloadSliceZipBtn.addEventListener('click', downloadSliceZip);
 
 const navButtons = Array.from(document.querySelectorAll('.nav-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
@@ -969,6 +1154,8 @@ let videoFrames = [];
 let activeVideoFrameIndex = -1;
 let videoCaptureRunId = 0;
 let videoProcessing = false;
+let videoZipProcessing = false;
+let videoChromaApplied = false;
 
 function videoDuration() {
   return Number.isFinite(videoPreview.duration) ? Math.max(0, videoPreview.duration) : 0;
@@ -1059,7 +1246,7 @@ function setDefaultFrameCount() {
 
 function updateVideoResultStats() {
   frameBadge.textContent = videoFrames.length + ' 帧';
-  downloadAllFramesBtn.disabled = videoFrames.length === 0 || videoProcessing;
+  downloadAllFramesBtn.disabled = videoFrames.length === 0 || videoProcessing || videoZipProcessing;
   chromaBtn.disabled = videoFrames.length === 0 || videoProcessing;
   if (videoFrames.length === 0) {
     outputResolution.textContent = '—';
@@ -1170,9 +1357,77 @@ function renderVideoFrames() {
   updateVideoResultStats();
 }
 
+function buildVideoZipPayload() {
+  const entries = videoFrames.map(function(frame, index) {
+    return {
+      name: 'frames/video-frame-' + paddedFrameNumber(index) + '.png',
+      url: frame.url
+    };
+  });
+  return {
+    entries: entries,
+    manifest: {
+      formatVersion: 1,
+      tool: 'Pixel Slicer Studio',
+      type: 'video-frames',
+      generatedAt: new Date().toISOString(),
+      source: videoFile ? videoFile.name : 'video',
+      video: {
+        duration: videoDuration(),
+        width: videoPreview.videoWidth,
+        height: videoPreview.videoHeight
+      },
+      segment: {
+        start: segmentStart,
+        end: segmentEnd,
+        duration: Math.max(0, segmentEnd - segmentStart)
+      },
+      sampling: {
+        mode: sampleModeSelect.value,
+        frameCount: videoFrames.length,
+        fps: sampleModeSelect.value === 'fps' ? readInteger(sampleFpsInput, 12, 1, 120) : null,
+        scale: Number(outputScaleSelect.value) || 1
+      },
+      output: {
+        width: videoFrames[0] ? videoFrames[0].canvas.width : 0,
+        height: videoFrames[0] ? videoFrames[0].canvas.height : 0,
+        alphaChannel: true,
+        chromaKeyApplied: videoChromaApplied
+      },
+      frames: videoFrames.map(function(frame, index) {
+        return {
+          file: 'frames/video-frame-' + paddedFrameNumber(index) + '.png',
+          index: index + 1,
+          time: frame.time,
+          timecode: formatTimecode(frame.time)
+        };
+      })
+    }
+  };
+}
+
+async function downloadVideoZip() {
+  if (videoFrames.length === 0 || videoZipProcessing) return;
+  videoZipProcessing = true;
+  updateVideoResultStats();
+  const payload = buildVideoZipPayload();
+  try {
+    await downloadZipBundle(payload.entries, 'video-frames.zip', payload.manifest, function(done, total) {
+      setVideoStatus('正在打包序列帧 ' + done + '/' + total + '...');
+    });
+    setVideoStatus('已下载 ZIP：' + payload.entries.length + ' 帧 PNG 与 manifest.json。', 'success');
+  } catch (error) {
+    setVideoStatus('ZIP 打包失败，请减少帧数或分段导出后重试。', 'error');
+  } finally {
+    videoZipProcessing = false;
+    updateVideoResultStats();
+  }
+}
+
 function resetVideoFrames() {
   videoFrames = [];
   activeVideoFrameIndex = -1;
+  videoChromaApplied = false;
   renderVideoFrames();
 }
 
@@ -1443,6 +1698,7 @@ extractBtn.addEventListener('click', async function() {
   }
   const currentRunId = ++videoCaptureRunId;
   videoProcessing = true;
+  videoChromaApplied = false;
   videoPreview.pause();
   extractBtn.disabled = true;
   clearFramesBtn.disabled = true;
@@ -1527,26 +1783,14 @@ chromaBtn.addEventListener('click', function() {
       applyChromaKeyToCanvas(frame.canvas, key, tolerance, feather);
       frame.url = frame.canvas.toDataURL('image/png');
     });
+    videoChromaApplied = true;
     renderVideoFrames();
     chromaBtn.disabled = false;
     setVideoStatus('色键透明已应用。', 'success');
   }, 0);
 });
 
-downloadAllFramesBtn.addEventListener('click', async function() {
-  if (videoFrames.length === 0) return;
-  downloadAllFramesBtn.disabled = true;
-  setVideoStatus('正在准备下载 ' + videoFrames.length + ' 帧...');
-  for (let index = 0; index < videoFrames.length; index += 1) {
-    const link = document.createElement('a');
-    link.href = videoFrames[index].url;
-    link.download = 'video-frame-' + paddedFrameNumber(index) + '.png';
-    link.click();
-    await new Promise(function(resolve) { window.setTimeout(resolve, 70); });
-  }
-  downloadAllFramesBtn.disabled = false;
-  setVideoStatus('已发起 ' + videoFrames.length + ' 个 PNG 下载。', 'success');
-});
+downloadAllFramesBtn.addEventListener('click', downloadVideoZip);
 
 window.addEventListener('keydown', function(event) {
   const activeTag = document.activeElement && document.activeElement.tagName;
